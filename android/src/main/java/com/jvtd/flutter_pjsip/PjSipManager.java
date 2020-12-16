@@ -1,5 +1,7 @@
 package com.jvtd.flutter_pjsip;
 
+import android.util.Log;
+
 import com.jvtd.flutter_pjsip.entity.MyAccount;
 import com.jvtd.flutter_pjsip.entity.MyCall;
 import com.jvtd.flutter_pjsip.interfaces.MyAppObserver;
@@ -8,12 +10,17 @@ import org.pjsip.pjsua2.AccountConfig;
 import org.pjsip.pjsua2.AuthCredInfo;
 import org.pjsip.pjsua2.AuthCredInfoVector;
 import org.pjsip.pjsua2.CallOpParam;
+import org.pjsip.pjsua2.CodecInfo;
+import org.pjsip.pjsua2.CodecInfoVector;
 import org.pjsip.pjsua2.Endpoint;
 import org.pjsip.pjsua2.EpConfig;
 import org.pjsip.pjsua2.IpChangeParam;
+import org.pjsip.pjsua2.LogConfig;
 import org.pjsip.pjsua2.TransportConfig;
 import org.pjsip.pjsua2.UaConfig;
+import org.pjsip.pjsua2.pj_log_decoration;
 import org.pjsip.pjsua2.pjsip_transport_type_e;
+import org.pjsip.pjsua2.pjsua_stun_use;
 
 /**
  * Description: PjSip管理类
@@ -103,6 +110,13 @@ public class PjSipManager
     }
 
     EpConfig epConfig = new EpConfig();
+    LogConfig logConfig = epConfig.getLogConfig();
+    logConfig.setLevel(4);
+    logConfig.setConsoleLevel(5);
+    SipLogWriter logWriter = new SipLogWriter();
+    logConfig.setWriter(logWriter);
+    logConfig.setDecor(logConfig.getDecor() & ~(pj_log_decoration.PJ_LOG_HAS_CR.swigValue() | pj_log_decoration.PJ_LOG_HAS_NEWLINE.swigValue()));
+
 
     // UAConfig，指定核心SIP用户代理设置
     UaConfig ua_cfg = epConfig.getUaConfig();
@@ -139,7 +153,7 @@ public class PjSipManager
     // 创建一个或多个传输
     try
     {
-      mEndPoint.transportCreate(pjsip_transport_type_e.PJSIP_TRANSPORT_UDP, sipTpConfig);
+      mEndPoint.transportCreate(pjsip_transport_type_e.PJSIP_TRANSPORT_TLS, sipTpConfig);
     } catch (Exception e)
     {
       e.printStackTrace();
@@ -166,6 +180,7 @@ public class PjSipManager
     try
     {
       mEndPoint.libStart();
+//      mEndPoint.codecSetPriority("opus/48000/2", (short) 255);
     } catch (Exception e)
     {
       e.printStackTrace();
@@ -217,8 +232,11 @@ public class PjSipManager
     // 未实现视频功能，先置位false
     mAccountConfig.getVideoConfig().setAutoTransmitOutgoing(false);// 自动向外传输视频流
     mAccountConfig.getVideoConfig().setAutoShowIncoming(false);// 自动接收并显示来的视频流
-    mAccountConfig.setIdUri("sip:" + username + "@" + ip + ":" + port);
-    mAccountConfig.getRegConfig().setRegistrarUri("sip:" + ip + ":" + port);
+    mAccountConfig.setIdUri("sips:" + username + "@" + ip + ":" + port);
+    mAccountConfig.getRegConfig().setRegistrarUri("sips:" + ip + ":" + port);
+    mAccountConfig.getNatConfig().setSipStunUse(pjsua_stun_use.PJSUA_STUN_USE_DISABLED);
+//    mAccountConfig.getNatConfig().setIceEnabled(false);
+
     AuthCredInfoVector creds = mAccountConfig.getSipConfig().getAuthCreds();
     if (creds != null)
     {
@@ -244,7 +262,7 @@ public class PjSipManager
     CallOpParam prm = new CallOpParam(true);
 //    prm.getOpt().setAudioCount(1);
 //    prm.getOpt().setVideoCount(1);
-    String uri = "sip:" + username + "@" + ip + ":" + port;
+    String uri = "sips:" + username + "@" + ip + ":" + port;
     try
     {
       call.makeCall(uri, prm);
