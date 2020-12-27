@@ -50,8 +50,8 @@ class FlutterPjsip {
   }
 
   ///pjsip初始化
-  Future<bool> pjsipInit() async {
-    return await _channel.invokeMethod('method_pjsip_init');
+  Future<bool> pjsipInit({bool enableLog = false}) async {
+    return await _channel.invokeMethod('method_pjsip_init', enableLog);
   }
 
   ///pjsip登录

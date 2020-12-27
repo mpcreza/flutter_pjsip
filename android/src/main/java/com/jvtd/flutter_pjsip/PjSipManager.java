@@ -19,8 +19,15 @@ import org.pjsip.pjsua2.LogConfig;
 import org.pjsip.pjsua2.TransportConfig;
 import org.pjsip.pjsua2.UaConfig;
 import org.pjsip.pjsua2.pj_log_decoration;
+import org.pjsip.pjsua2.pjmedia_srtp_use;
+import org.pjsip.pjsua2.pjsip_status_code;
 import org.pjsip.pjsua2.pjsip_transport_type_e;
 import org.pjsip.pjsua2.pjsua_stun_use;
+
+import static org.pjsip.pjsua2.pj_constants_.PJ_TRUE;
+import static org.pjsip.pjsua2.pjsua_call_flag.PJSUA_CALL_REINIT_MEDIA;
+import static org.pjsip.pjsua2.pjsua_call_flag.PJSUA_CALL_UPDATE_CONTACT;
+import static org.pjsip.pjsua2.pjsua_call_flag.PJSUA_CALL_UPDATE_VIA;
 
 /**
  * Description: PjSip管理类
@@ -32,6 +39,7 @@ public class PjSipManager
   private static volatile PjSipManager mInstance;
   private AccountConfig mAccountConfig;
   private MyAccount mAccount;
+  SipLogWriter logWriter;
 
   static
   {
@@ -83,9 +91,9 @@ public class PjSipManager
    * @author Jack Zhang
    * create at 2019-08-12 14:34
    */
-  public void init(MyAppObserver obs)
+  public void init(MyAppObserver obs, boolean enableLog)
   {
-    init(obs, false);
+    init(obs, false, enableLog);
   }
 
   /**
@@ -94,7 +102,7 @@ public class PjSipManager
    * @author Jack Zhang
    * create at 2019-08-12 14:34
    */
-  public void init(MyAppObserver obs, boolean own_worker_thread)
+  public void init(MyAppObserver obs, boolean own_worker_thread, boolean enableLog)
   {
     observer = obs;
 
@@ -110,12 +118,15 @@ public class PjSipManager
     }
 
     EpConfig epConfig = new EpConfig();
-    LogConfig logConfig = epConfig.getLogConfig();
-    logConfig.setLevel(4);
-    logConfig.setConsoleLevel(5);
-    SipLogWriter logWriter = new SipLogWriter();
-    logConfig.setWriter(logWriter);
-    logConfig.setDecor(logConfig.getDecor() & ~(pj_log_decoration.PJ_LOG_HAS_CR.swigValue() | pj_log_decoration.PJ_LOG_HAS_NEWLINE.swigValue()));
+
+    if(enableLog) {
+      LogConfig logConfig = epConfig.getLogConfig();
+      logConfig.setLevel(4);
+      logConfig.setConsoleLevel(5);
+      logWriter = new SipLogWriter();
+      logConfig.setWriter(logWriter);
+      logConfig.setDecor(logConfig.getDecor() & ~(pj_log_decoration.PJ_LOG_HAS_CR.swigValue() | pj_log_decoration.PJ_LOG_HAS_NEWLINE.swigValue()));
+    }
 
 
     // UAConfig，指定核心SIP用户代理设置
@@ -130,7 +141,7 @@ public class PjSipManager
     /* No worker thread */
     if (own_worker_thread)
     {
-      ua_cfg.setThreadCnt(0);
+//      ua_cfg.setThreadCnt(0);
       ua_cfg.setMainThreadOnly(true);
     }
 
@@ -148,17 +159,17 @@ public class PjSipManager
     int SIP_PORT = 6050;
 
     /* Set SIP port back to default for JSON saved config */
-    sipTpConfig.setPort(SIP_PORT);
+//    sipTpConfig.setPort(SIP_PORT);
 
     // 创建一个或多个传输
-    try
-    {
-      mEndPoint.transportCreate(pjsip_transport_type_e.PJSIP_TRANSPORT_TLS, sipTpConfig);
-    } catch (Exception e)
-    {
-      e.printStackTrace();
-      return;
-    }
+//    try
+//    {
+//      mEndPoint.transportCreate(pjsip_transport_type_e.PJSIP_TRANSPORT_UDP, sipTpConfig);
+//    } catch (Exception e)
+//    {
+//      e.printStackTrace();
+//      return;
+//    }
 //    try
 //    {
 //      mEndPoint.transportCreate(pjsip_transport_type_e.PJSIP_TRANSPORT_TCP, sipTpConfig);
@@ -167,20 +178,20 @@ public class PjSipManager
 //      e.printStackTrace();
 //    }
 //
-//    try
-//    {
+    try
+    {
 //      sipTpConfig.setPort(SIP_PORT + 1);
-//      mEndPoint.transportCreate(pjsip_transport_type_e.PJSIP_TRANSPORT_TLS, sipTpConfig);
-//    } catch (Exception e)
-//    {
-//      e.printStackTrace();
-//    }
+      mEndPoint.transportCreate(pjsip_transport_type_e.PJSIP_TRANSPORT_TLS, sipTpConfig);
+    } catch (Exception e)
+    {
+      e.printStackTrace();
+    }
 
     /* Start. */
     try
     {
       mEndPoint.libStart();
-//      mEndPoint.codecSetPriority("opus/48000/2", (short) 255);
+      mEndPoint.codecSetPriority("opus/48000/2", (short) 255);
     } catch (Exception e)
     {
       e.printStackTrace();
@@ -227,15 +238,31 @@ public class PjSipManager
 
   public void login(String username, String password, String ip, String port)
   {
+    String transportString = ";transport=tls";
+    String sipAccountRegId = "sip:" + username + "@" + ip + ":" + port + transportString;
+    String sipRegistrarUri = "sip:" + ip + ":" + port + transportString;
+
     mAccountConfig = new AccountConfig();
-    mAccountConfig.getNatConfig().setIceEnabled(true);
+//    mAccountConfig.getNatConfig().setIceEnabled(false);
     // 未实现视频功能，先置位false
     mAccountConfig.getVideoConfig().setAutoTransmitOutgoing(false);// 自动向外传输视频流
     mAccountConfig.getVideoConfig().setAutoShowIncoming(false);// 自动接收并显示来的视频流
-    mAccountConfig.setIdUri("sips:" + username + "@" + ip + ":" + port);
-    mAccountConfig.getRegConfig().setRegistrarUri("sips:" + ip + ":" + port);
-    mAccountConfig.getNatConfig().setSipStunUse(pjsua_stun_use.PJSUA_STUN_USE_DISABLED);
-//    mAccountConfig.getNatConfig().setIceEnabled(false);
+    mAccountConfig.setIdUri(sipAccountRegId);
+    mAccountConfig.getRegConfig().setRegistrarUri(sipRegistrarUri);
+    mAccountConfig.getSipConfig().getProxies().add(sipRegistrarUri);
+//    mAccountConfig.getNatConfig().setSipStunUse(pjsua_stun_use.PJSUA_STUN_USE_DISABLED);
+
+    // TLS Configuration
+//    mAccountConfig.getMediaConfig().setSrtpSecureSignaling(1);
+//    mAccountConfig.getMediaConfig().setSrtpUse(pjmedia_srtp_use.PJMEDIA_SRTP_MANDATORY);
+
+    // IP Address account configuration
+    mAccountConfig.getIpChangeConfig().setShutdownTp(false);
+    mAccountConfig.getIpChangeConfig().setHangupCalls(false);
+    mAccountConfig.getIpChangeConfig().setReinviteFlags(PJSUA_CALL_UPDATE_CONTACT.swigValue() | PJSUA_CALL_REINIT_MEDIA.swigValue() | PJSUA_CALL_UPDATE_VIA.swigValue());
+
+    mAccountConfig.getNatConfig().setContactRewriteUse(PJ_TRUE.swigValue());
+    mAccountConfig.getNatConfig().setContactRewriteMethod(4);
 
     AuthCredInfoVector creds = mAccountConfig.getSipConfig().getAuthCreds();
     if (creds != null)
@@ -259,10 +286,11 @@ public class PjSipManager
   public MyCall call(String username, String ip, String port)
   {
     MyCall call = new MyCall(mAccount, -1);
-    CallOpParam prm = new CallOpParam(true);
+    CallOpParam prm = new CallOpParam();
+    prm.setStatusCode(pjsip_status_code.PJSIP_SC_RINGING);
 //    prm.getOpt().setAudioCount(1);
 //    prm.getOpt().setVideoCount(1);
-    String uri = "sips:" + username + "@" + ip + ":" + port;
+    String uri = "sip:" + username + "@" + ip + ":" + port;
     try
     {
       call.makeCall(uri, prm);

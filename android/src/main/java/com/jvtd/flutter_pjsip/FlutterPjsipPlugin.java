@@ -339,7 +339,8 @@ public class FlutterPjsipPlugin implements MethodCallHandler
     switch (mMethod)
     {
       case METHOD_PJSIP_INIT:
-        pjsipInit();
+        boolean enableLog = (boolean) call.arguments;
+        pjsipInit(enableLog);
         break;
 
       case METHOD_PJSIP_LOGIN:
@@ -394,13 +395,13 @@ public class FlutterPjsipPlugin implements MethodCallHandler
    * @author Jack Zhang
    * create at 2019-08-12 23:37
    */
-  private void pjsipInit()
+  private void pjsipInit(boolean enableLog)
   {
     if (mPjSipManagerState.getCode() > PjSipManagerState.STATE_UNDEFINED.getCode())
       mResult.success(false);
     else
     {
-      mPjSipManager.init(mAppObserver);
+      mPjSipManager.init(mAppObserver, enableLog);
 
       if (mReceiver == null)
       {
